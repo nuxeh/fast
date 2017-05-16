@@ -9,7 +9,7 @@ void pgm_write(const char *filename,
 	if(f) {
 		fprintf(f,"P5\n%d %d\n255\n",width,height);
 		fwrite(buf,width,height,f);
-		fclose(f);   
+		fclose(f);
 	}
 }
 
@@ -17,7 +17,7 @@ void putpixel(unsigned char *img, int x, int y)
 {
 	static int count = 0;
 
-	img[x + y * 100] = 0;
+	img[x + y * 100] ^= 255;
 
 	count++;
 	//printf("count: %d\n", count);
@@ -53,6 +53,7 @@ void circle(unsigned char *img, int xc, int yc, int r)
 	y = r;
 	while(x <= y)
 	{
+		#if 1
 		putpixel(img, xc + x, yc + y);
 		putpixel(img, xc - y, yc - x);
 		putpixel(img, xc + y, yc - x);
@@ -61,10 +62,10 @@ void circle(unsigned char *img, int xc, int yc, int r)
 		putpixel(img, xc - x, yc - y);
 		putpixel(img, xc + x, yc - y);
 		putpixel(img, xc - x, yc + y);
-
+		#endif
 		#if 0
 		char out_str[20];
-		sprintf(out_str, "/tmp/bcirc_%03d.pgm\0", ii++);
+		sprintf(out_str, "/tmp/bcirc2__%03d.pgm\0", ii++);
 		printf("%s\n", out_str);
 		pgm_write(out_str, 100, 100, img);
 		#endif
@@ -89,16 +90,16 @@ void circle(unsigned char *img, int xc, int yc, int r)
 	d = 3 - 2 * r;
 	x = 0;
 	y = r;
-	while (x < p)
+	while (x <= y)
 	{
-		set_point(&c_pixels[x],      x,  y);
-		set_point(&c_pixels[x+p],   -y, -x);
-		set_point(&c_pixels[x+2*p],  y, -x);
-		set_point(&c_pixels[x+3*p], -y,  x);
-		set_point(&c_pixels[x+4*p],  y, +x);
-		set_point(&c_pixels[x+5*p], -x, -y);
-		set_point(&c_pixels[x+6*p],  x, -y);
-		set_point(&c_pixels[x+7*p], -x,  y);
+		set_point(&c_pixels[x],       +x, -y);
+		set_point(&c_pixels[(2*p)-x-1], +y, -x);
+		set_point(&c_pixels[(2*p)+x-1],   +y, +x);
+		set_point(&c_pixels[(4*p)-x-2], +x, +y);
+		set_point(&c_pixels[(4*p)+x-2],   -x, +y);
+		set_point(&c_pixels[(6*p)-x-3], -y, +x);
+		set_point(&c_pixels[(6*p)+x-3],   -y, -x);
+		set_point(&c_pixels[(8*p)-x-4], -x, -y);
 
 		printf("x: %d y: %d\n", x, y);
 
@@ -119,6 +120,20 @@ void circle(unsigned char *img, int xc, int yc, int r)
 		}
 		printf("\n");
 	}
+	#if 1
+	//unsigned char *img2 = malloc(100 * 100);
+	//memset(img2, 255, 1000 * 1000);
+	for (i = 0; i < p * 8; i++) {
+		putpixel(img, xc + c_pixels[i].x + 10, yc + c_pixels[i].y);
+		#if 1
+		char out_str[20];
+		sprintf(out_str, "/tmp/bcirc2_%03d.pgm\0", ii++);
+		printf("%s\n", out_str);
+		pgm_write(out_str, 100, 100, img);
+		#endif
+	}
+	//free(img2);
+	#endif
 }
 
 int main(void)
@@ -132,7 +147,7 @@ int main(void)
 //	circle(img, 500, 500, 5);
 //	circle(img, 500, 500, 2);
 //	circle(img, 500, 500, 3);
-	circle(img, 50, 50, 15);
+	circle(img, 25, 75, 11);
 
 	pgm_write("/tmp/bcirc.pgm", 100, 100, img);
 }
