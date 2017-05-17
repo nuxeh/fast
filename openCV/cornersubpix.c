@@ -52,25 +52,25 @@
 
 #include "cornersubpix.h"
 
-inline int cvFloor(double value)
+static inline int cvFloor(double value)
 {
     int i = (int)value;
     return i - (i > value);
 }
 
-inline int cvRound(double value)
+static inline int cvRound(double value)
 {
     return (int)(value + (value >= 0 ? 0.5 : -0.5));
 }
 
 enum { SUBPIX_SHIFT=16 };
 
-inline int scale_op(float a)
+static inline int scale_op(float a)
 {
 	return cvRound(a*(1 << SUBPIX_SHIFT));
 }
 
-inline int cast_op(int a)
+static inline int cast_op(int a)
 {
 	return (unsigned char)((a + (1 << (SUBPIX_SHIFT-1))) >> SUBPIX_SHIFT);
 }
