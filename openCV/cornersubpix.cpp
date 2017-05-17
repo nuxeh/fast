@@ -39,31 +39,193 @@
 // the use of this software, even if advised of the possibility of such damage.
 //
 //M*/
-#include "precomp.hpp"
 
-void cv::cornerSubPix( InputArray _image, InputOutputArray _corners,
-                       Size win, Size zeroZone, TermCriteria criteria )
+// Ported to C and made to work with only 1 channel 8-bit unsigned char images
+
+#include <math.h>
+#include <assert.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <limits.h>
+#include <float.h>
+
+inline int cvRound(double value)
 {
-    CV_INSTRUMENT_REGION()
+    return (int)(value + (value >= 0 ? 0.5 : -0.5));
+}
 
+enum { SUBPIX_SHIFT=16 };
+
+inline int scale_op(float a)
+{
+	return cvRound(a*(1 << SUBPIX_SHIFT));
+}
+
+inline int cast_op(int a)
+{
+	return (unsigned char)((a + (1 << (SUBPIX_SHIFT-1))) >> SUBPIX_SHIFT);
+}
+
+static const unsigned char* adjustRect(
+	const unsigned char *src, size_t src_step, int pix_size,
+	Size src_size, Size win_size,
+	Point ip, Rect* pRect )
+{
+    Rect rect;
+
+    if( ip.x >= 0 )
+    {
+        src += ip.x*pix_size;
+        rect.x = 0;
+    }
+    else
+    {
+        rect.x = -ip.x;
+        if( rect.x > win_size.width )
+            rect.x = win_size.width;
+    }
+
+    if( ip.x < src_size.width - win_size.width )
+        rect.width = win_size.width;
+    else
+    {
+        rect.width = src_size.width - ip.x - 1;
+        if( rect.width < 0 )
+        {
+            src += rect.width*pix_size;
+            rect.width = 0;
+        }
+        assert( rect.width <= win_size.width );
+    }
+
+    if( ip.y >= 0 )
+    {
+        src += ip.y * src_step;
+        rect.y = 0;
+    }
+    else
+        rect.y = -ip.y;
+
+    if( ip.y < src_size.height - win_size.height )
+        rect.height = win_size.height;
+    else
+    {
+        rect.height = src_size.height - ip.y - 1;
+        if( rect.height < 0 )
+        {
+            src += rect.height*src_step;
+            rect.height = 0;
+        }
+    }
+
+    *pRect = rect;
+    return src - rect.x*pix_size;
+}
+
+void getRectSubPix(unsigned char *src, size_t src_step, Size src_size,
+                   unsigned char *dst, size_t dst_step, Size win_size, Point2f center)
+{
+    int cn = 1;
+    Point ip;
+    _WTp a11, a12, a21, a22, b1, b2;
+    float a, b;
+    int i, j, c;
+
+    center.x -= (win_size.width-1)*0.5f;
+    center.y -= (win_size.height-1)*0.5f;
+
+    ip.x = cvFloor( center.x );
+    ip.y = cvFloor( center.y );
+
+    a = center.x - ip.x;
+    b = center.y - ip.y;
+    a11 = scale_op((1.f-a)*(1.f-b));
+    a12 = scale_op(a*(1.f-b));
+    a21 = scale_op((1.f-a)*b);
+    a22 = scale_op(a*b);
+    b1 = scale_op(1.f - b);
+    b2 = scale_op(b);
+
+    src_step /= sizeof(src[0]);
+    dst_step /= sizeof(dst[0]);
+
+    if( 0 <= ip.x && ip.x < src_size.width - win_size.width &&
+       0 <= ip.y && ip.y < src_size.height - win_size.height)
+    {
+        // extracted rectangle is totally inside the image
+        src += ip.y * src_step + ip.x*cn;
+        win_size.width *= cn;
+
+        for( i = 0; i < win_size.height; i++, src += src_step, dst += dst_step )
+        {
+            for( j = 0; j <= win_size.width - 2; j += 2 )
+            {
+                _WTp s0 = src[j]*a11 + src[j+cn]*a12 + src[j+src_step]*a21 + src[j+src_step+cn]*a22;
+                _WTp s1 = src[j+1]*a11 + src[j+cn+1]*a12 + src[j+src_step+1]*a21 + src[j+src_step+cn+1]*a22;
+                dst[j] = cast_op(s0);
+                dst[j+1] = cast_op(s1);
+            }
+
+            for( ; j < win_size.width; j++ )
+            {
+                _WTp s0 = src[j]*a11 + src[j+cn]*a12 + src[j+src_step]*a21 + src[j+src_step+cn]*a22;
+                dst[j] = cast_op(s0);
+            }
+        }
+    }
+    else
+    {
+        Rect r;
+        src = (const _Tp*)adjustRect( (const uchar*)src, src_step*sizeof(*src),
+                                     sizeof(*src)*cn, src_size, win_size, ip, &r);
+
+        for( i = 0; i < win_size.height; i++, dst += dst_step )
+        {
+            const _Tp *src2 = src + src_step;
+            _WTp s0;
+
+            if( i < r.y || i >= r.height )
+                src2 -= src_step;
+
+            for( c = 0; c < cn; c++ )
+            {
+                s0 = src[r.x*cn + c]*b1 + src2[r.x*cn + c]*b2;
+                for( j = 0; j < r.x; j++ )
+                    dst[j*cn + c] = cast_op(s0);
+                s0 = src[r.width*cn + c]*b1 + src2[r.width*cn + c]*b2;
+                for( j = r.width; j < win_size.width; j++ )
+                    dst[j*cn + c] = cast_op(s0);
+            }
+
+            for( j = r.x*cn; j < r.width*cn; j++ )
+            {
+                s0 = src[j]*a11 + src[j+cn]*a12 + src2[j]*a21 + src2[j+cn]*a22;
+                dst[j] = cast_op(s0);
+            }
+
+            if( i < r.height )
+                src = src2;
+        }
+    }
+}
+
+void cornerSubPix(unsigned char *src, Point2f *corners, int count,
+                  int win_w, int win_h, Size zeroZone)
+{
     const int MAX_ITERS = 100;
     int win_w = win.width * 2 + 1, win_h = win.height * 2 + 1;
     int i, j, k;
-    int max_iters = (criteria.type & CV_TERMCRIT_ITER) ? MIN(MAX(criteria.maxCount, 1), MAX_ITERS) : MAX_ITERS;
-    double eps = (criteria.type & CV_TERMCRIT_EPS) ? MAX(criteria.epsilon, 0.) : 0;
-    eps *= eps; // use square of error in comparsion operations
+    int max_iters = MAX_ITERS;
 
-    cv::Mat src = _image.getMat(), cornersmat = _corners.getMat();
-    int count = cornersmat.checkVector(2, CV_32F);
-    CV_Assert( count >= 0 );
-    Point2f* corners = cornersmat.ptr<Point2f>();
+    double eps = 0.001;
+    eps *= eps; // use square of error in comparsion operations
 
     if( count == 0 )
         return;
 
-    CV_Assert( win.width > 0 && win.height > 0 );
-    CV_Assert( src.cols >= win.width*2 + 5 && src.rows >= win.height*2 + 5 );
-    CV_Assert( src.channels() == 1 );
+    if (win.width <= 0 && win.height <= 0)
+	return;
 
     Mat maskm(win_h, win_w, CV_32F), subpix_buf(win_h+2, win_w+2, CV_32F);
     float* mask = maskm.ptr<float>();
@@ -71,14 +233,15 @@ void cv::cornerSubPix( InputArray _image, InputOutputArray _corners,
     for( i = 0; i < win_h; i++ )
     {
         float y = (float)(i - win.height)/win.height;
-        float vy = std::exp(-y*y);
+        float vy = exp(-y*y);
         for( j = 0; j < win_w; j++ )
         {
             float x = (float)(j - win.width)/win.width;
-            mask[i * win_w + j] = (float)(vy*std::exp(-x*x));
+            mask[i * win_w + j] = (float)(vy*exp(-x*x));
         }
     }
 
+#if 0
     // make zero_zone
     if( zeroZone.width >= 0 && zeroZone.height >= 0 &&
         zeroZone.width * 2 + 1 < win_w && zeroZone.height * 2 + 1 < win_h )
@@ -91,6 +254,7 @@ void cv::cornerSubPix( InputArray _image, InputOutputArray _corners,
             }
         }
     }
+#endif
 
     // do optimization loop for all the points
     for( int pt_i = 0; pt_i < count; pt_i++ )
@@ -156,16 +320,3 @@ void cv::cornerSubPix( InputArray _image, InputOutputArray _corners,
 }
 
 
-CV_IMPL void
-cvFindCornerSubPix( const void* srcarr, CvPoint2D32f* _corners,
-                   int count, CvSize win, CvSize zeroZone,
-                   CvTermCriteria criteria )
-{
-    if(!_corners || count <= 0)
-        return;
-
-    cv::Mat src = cv::cvarrToMat(srcarr), corners(count, 1, CV_32FC2, _corners);
-    cv::cornerSubPix(src, corners, win, zeroZone, criteria);
-}
-
-/* End of file. */
