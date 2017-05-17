@@ -34,16 +34,18 @@ struct octant {
 	struct xy *ds[];
 };
 
-static inline void set_point(struct xy *p, int x, int y)
+static inline void set_point(struct xy *p, int m, int i, int x, int y)
 {
-	p->x = x;
-	p->y = y;
+	if (i >= m)
+		return;
+	p[i].x = x;
+	p[i].y = y;
 }
 
 /* Bressenham circle */
 void circle(unsigned char *img, int xc, int yc, int r)
 {
-	int d, x, y, p, i;
+	int d, x, y, p, i, l;
 
 	int ii = 0;
 	struct xy *c_pixels;
@@ -82,8 +84,9 @@ void circle(unsigned char *img, int xc, int yc, int r)
 	}
 
 	p = x;
-	c_pixels = malloc(p * 8 * sizeof(struct xy));
-	memset(c_pixels, 0, p * 8 * sizeof(struct xy));
+	l = (p-1) * 8;
+	c_pixels = malloc(l * sizeof(struct xy));
+	memset(c_pixels, 0, l * sizeof(struct xy));
 
 	printf("x: %d\n", p);
 
@@ -92,16 +95,16 @@ void circle(unsigned char *img, int xc, int yc, int r)
 	y = r;
 	while (x <= y)
 	{
-		set_point(&c_pixels[x],       +x, -y);
-		set_point(&c_pixels[(2*p)-x-1], +y, -x);
-		set_point(&c_pixels[(2*p)+x-1],   +y, +x);
-		set_point(&c_pixels[(4*p)-x-2], +x, +y);
-		set_point(&c_pixels[(4*p)+x-2],   -x, +y);
-		set_point(&c_pixels[(6*p)-x-3], -y, +x);
-		set_point(&c_pixels[(6*p)+x-3],   -y, -x);
-		set_point(&c_pixels[(8*p)-x-4], -x, -y);
-
 		printf("x: %d y: %d\n", x, y);
+		set_point(c_pixels, l, x,	  +x, -y);
+		set_point(c_pixels, l, (2*p)-x-2, +y, -x);
+		set_point(c_pixels, l, (2*p)+x-2, +y, +x);
+		set_point(c_pixels, l, (4*p)-x-4, +x, +y);
+		set_point(c_pixels, l, (4*p)+x-4, -x, +y);
+		set_point(c_pixels, l, (6*p)-x-6, -y, +x);
+		set_point(c_pixels, l, (6*p)+x-6, -y, -x);
+		set_point(c_pixels, l, (8*p)-x-8, -x, -y);
+
 
 		if(d <= 0) {
 			d = d + 4 * x + 6;
@@ -112,9 +115,9 @@ void circle(unsigned char *img, int xc, int yc, int r)
 		x++;
 
 
-		for (i = 0; i < p * 8; i++) {
+		for (i = 0; i < (p-1) * 8; i++) {
 			if (c_pixels[i].x == 0 && c_pixels[i].y == 0)
-				printf(" ");
+				printf("_");
 			else
 				printf("#");
 		}
@@ -123,7 +126,7 @@ void circle(unsigned char *img, int xc, int yc, int r)
 	#if 1
 	//unsigned char *img2 = malloc(100 * 100);
 	//memset(img2, 255, 1000 * 1000);
-	for (i = 0; i < p * 8; i++) {
+	for (i = 0; i < (p-1) * 8; i++) {
 		putpixel(img, xc + c_pixels[i].x + 10, yc + c_pixels[i].y);
 		#if 1
 		char out_str[20];
@@ -134,6 +137,7 @@ void circle(unsigned char *img, int xc, int yc, int r)
 	}
 	//free(img2);
 	#endif
+	free(c_pixels);
 }
 
 int main(void)
@@ -147,7 +151,8 @@ int main(void)
 //	circle(img, 500, 500, 5);
 //	circle(img, 500, 500, 2);
 //	circle(img, 500, 500, 3);
-	circle(img, 25, 75, 11);
+	circle(img, 25, 75, 17);
 
 	pgm_write("/tmp/bcirc.pgm", 100, 100, img);
+	free(img);
 }
