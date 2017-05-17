@@ -135,7 +135,7 @@ typedef int _WTp;
 typedef unsigned char _Tp;
 
 void getRectSubPix(unsigned char *src, size_t src_step, Size src_size,
-                   unsigned char *dst, size_t dst_step, Size win_size, Point2f center)
+                   float *dst, size_t dst_step, Size win_size, Point2f center)
 {
     int cn = 1;
     Point ip;
@@ -224,7 +224,8 @@ void getRectSubPix(unsigned char *src, size_t src_step, Size src_size,
 #define SPX_EPS 0.001
 #define SPX_ITERS 100
 
-void cornerSubPix(unsigned char *src, Point2f *corners, int count, int ww, int wh)
+void cornerSubPix(unsigned char *src, int rows, int cols,
+		  Point2f *corners, int count, int ww, int wh)
 {
     const int MAX_ITERS = 100;
     Size win = {ww, wh};
@@ -241,8 +242,8 @@ void cornerSubPix(unsigned char *src, Point2f *corners, int count, int ww, int w
     if (win.width <= 0 && win.height <= 0)
 	return;
 
-    Mat maskm(win_h, win_w, CV_32F), subpix_buf(win_h+2, win_w+2, CV_32F);
-    float* mask = maskm.ptr<float>();
+    float *mask = malloc(win_h * win_w * sizeof(float));
+    float *subpix_buf = malloc((win_h+2) * (win_w+2) * sizeof(float));
 
     for( i = 0; i < win_h; i++ )
     {
@@ -282,8 +283,11 @@ void cornerSubPix(unsigned char *src, Point2f *corners, int count, int ww, int w
             Point2f cI2;
             double a = 0, b = 0, c = 0, bb1 = 0, bb2 = 0;
 
-            getRectSubPix(src, Size(win_w+2, win_h+2), cI, subpix_buf, subpix_buf.type());
-            const float* subpix = &subpix_buf.at<float>(1,1);
+	    Size ds = {win_w+2, win_h+2};
+	    Size is = {cols, rows};
+            getRectSubPix(src, is.width, is, subpix_buf, ds.width, ds, cI);
+
+	    const float* subpix = &subpix_buf[1 + ds.width];
 
             // process gradient
             for( i = 0, k = 0; i < win_h; i++, subpix += win_w + 2 )
@@ -319,7 +323,7 @@ void cornerSubPix(unsigned char *src, Point2f *corners, int count, int ww, int w
             cI2.y = (float)(cI.y - b*scale*bb1 + a*scale*bb2);
             err = (cI2.x - cI.x) * (cI2.x - cI.x) + (cI2.y - cI.y) * (cI2.y - cI.y);
             cI = cI2;
-            if( cI.x < 0 || cI.x >= src.cols || cI.y < 0 || cI.y >= src.rows )
+            if( cI.x < 0 || cI.x >= cols || cI.y < 0 || cI.y >= rows )
                 break;
         }
         while( ++iter < max_iters && err > eps );
@@ -331,6 +335,9 @@ void cornerSubPix(unsigned char *src, Point2f *corners, int count, int ww, int w
 
         corners[pt_i] = cI;
     }
+
+    free(mask);
+    free(subpix_buf);
 }
 
 int main(void)
@@ -339,7 +346,7 @@ int main(void)
 	Point2f c[] = {{40, 40}};
 	int count = 1;
 
-	cornerSubPix(img, c, count, 100, 100)
+	cornerSubPix(img, 100, 100, &c[0], count, 10, 10);
 
 	free(img);
 
