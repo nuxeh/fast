@@ -50,6 +50,8 @@
 #include <limits.h>
 #include <float.h>
 
+#include "cornersubpix.h"
+
 inline int cvRound(double value)
 {
     return (int)(value + (value >= 0 ? 0.5 : -0.5));
@@ -122,6 +124,8 @@ static const unsigned char* adjustRect(
     *pRect = rect;
     return src - rect.x*pix_size;
 }
+
+typedef _WTp int;
 
 void getRectSubPix(unsigned char *src, size_t src_step, Size src_size,
                    unsigned char *dst, size_t dst_step, Size win_size, Point2f center)
@@ -210,15 +214,18 @@ void getRectSubPix(unsigned char *src, size_t src_step, Size src_size,
     }
 }
 
-void cornerSubPix(unsigned char *src, Point2f *corners, int count,
-                  int win_w, int win_h, Size zeroZone)
+#define SPX_EPS 0.001
+#define SPX_EPS 100
+
+void cornerSubPix(unsigned char *src, Point2f *corners, int count, int ww, int wh)
 {
     const int MAX_ITERS = 100;
+    Size win = {ww, wh};
     int win_w = win.width * 2 + 1, win_h = win.height * 2 + 1;
     int i, j, k;
-    int max_iters = MAX_ITERS;
+    int max_iters = SPX_ITERS;
 
-    double eps = 0.001;
+    double eps = SPX_EPS;
     eps *= eps; // use square of error in comparsion operations
 
     if( count == 0 )
