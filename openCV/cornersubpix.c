@@ -52,6 +52,8 @@
 
 #include "cornersubpix.h"
 
+#include "pgm.x"
+
 static inline int cvFloor(double value)
 {
     int i = (int)value;
@@ -221,10 +223,10 @@ void getRectSubPix(unsigned char *src, size_t src_step, Size src_size,
     }
 }
 
-#define SPX_EPS 0.001
+#define SPX_EPS 0.000001
 #define SPX_ITERS 100
 
-void cornerSubPix(unsigned char *src, int rows, int cols,
+void cornerSubPix(unsigned char *src, int cols, int rows,
 		  Point2f *corners, int count, int ww, int wh)
 {
     const int MAX_ITERS = 100;
@@ -340,13 +342,21 @@ void cornerSubPix(unsigned char *src, int rows, int cols,
     free(subpix_buf);
 }
 
-int main(void)
+
+
+int main(int argc, char **argv)
 {
-	unsigned char *img = malloc(10000);
-	Point2f c[] = {{40, 40}};
+	unsigned char *img;
+	int w, h;
+	img = pgm_read(argv[1], &w, &h);
+	Point2f c[] = {{3339.0, 856.0}};
 	int count = 1;
 
-	cornerSubPix(img, 100, 100, &c[0], count, 10, 10);
+	cornerSubPix(img, w, h, c, count, 10, 10);
+
+	pgm_write("/tmp/1.pgm", w, h, img);
+
+	printf("corner: x: %f y: %f\n", c[0].x, c[0].y);
 
 	free(img);
 
