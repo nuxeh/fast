@@ -125,7 +125,7 @@ static const unsigned char* adjustRect(
     return src - rect.x*pix_size;
 }
 
-typedef _WTp int;
+typedef int _WTp;
 
 void getRectSubPix(unsigned char *src, size_t src_step, Size src_size,
                    unsigned char *dst, size_t dst_step, Size win_size, Point2f center)
@@ -326,4 +326,14 @@ void cornerSubPix(unsigned char *src, Point2f *corners, int count, int ww, int w
     }
 }
 
+int main(void)
+{
+	unsigned char *img = malloc(10000);
+	Point2f c[] = {{40, 40}};
+	int count = 1;
 
+	cornerSubPix(img, c, count, 100, 100)
+
+	free(img);
+
+}
