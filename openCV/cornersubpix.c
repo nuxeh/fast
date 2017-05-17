@@ -52,6 +52,12 @@
 
 #include "cornersubpix.h"
 
+inline int cvFloor(double value)
+{
+    int i = (int)value;
+    return i - (i > value);
+}
+
 inline int cvRound(double value)
 {
     return (int)(value + (value >= 0 ? 0.5 : -0.5));
@@ -126,6 +132,7 @@ static const unsigned char* adjustRect(
 }
 
 typedef int _WTp;
+typedef unsigned char _Tp;
 
 void getRectSubPix(unsigned char *src, size_t src_step, Size src_size,
                    unsigned char *dst, size_t dst_step, Size win_size, Point2f center)
@@ -215,7 +222,7 @@ void getRectSubPix(unsigned char *src, size_t src_step, Size src_size,
 }
 
 #define SPX_EPS 0.001
-#define SPX_EPS 100
+#define SPX_ITERS 100
 
 void cornerSubPix(unsigned char *src, Point2f *corners, int count, int ww, int wh)
 {

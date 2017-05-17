@@ -1,23 +1,25 @@
 /* Various structs required for OpenCV, converted from C++ classes */
 
-struct Rect {
+typedef struct Rect {
 	int x;
 	int y;
 	int width;
 	int height;
-};
+} Rect;
 
-struct Point {
+typedef struct Point {
 	int x;
 	int y;
-};
+} Point;
 
-struct Point2f {
+typedef struct Point2f {
 	float x;
 	float y;
-};
+} Point2f;
 
-struct Size {
+typedef struct Size {
 	int width;
 	int height;
-};
+} Size;
+
+typedef unsigned char uchar;
