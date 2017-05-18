@@ -308,6 +308,7 @@ void cornerSubPix(unsigned char *src, int cols, int rows,
 
     CvMat cv_mat = cvMat(rows, cols, CV_8U, src);
     CvMat out_mat = cvMat((win_h+2), (win_w+2), CV_32F, subpix_buf2);
+    printf("in mat step: %d out mat step: %d\n", cv_mat.step, out_mat.step);
 
     for( i = 0; i < win_h; i++ )
     {
@@ -320,16 +321,16 @@ void cornerSubPix(unsigned char *src, int cols, int rows,
         }
     }
 
-#if 1
-    // make zero_zone
-        for( i = win.height - (win.height/2); i <= win.height + (win.width/2); i++ )
+    #if 1
+    // make zero_zone (half the window width, in the centre of the window
+    for( i = win.height - (win.height/2); i <= win.height + (win.width/2); i++ )
+    {
+        for( j = win.width - (win.height/2); j <= win.width + (win.width/2); j++ )
         {
-            for( j = win.width - (win.height/2); j <= win.width + (win.width/2); j++ )
-            {
-                mask[i * win_w + j] = 0;
-            }
+            mask[i * win_w + j] = 0;
         }
-#endif
+    }
+    #endif
 
     // do optimization loop for all the points
     for( int pt_i = 0; pt_i < count; pt_i++ )
@@ -346,7 +347,10 @@ void cornerSubPix(unsigned char *src, int cols, int rows,
 
 	    Size ds = {win_w+2, win_h+2};
 	    Size is = {cols, rows};
-            getRectSubPix_8u32f(src, is.width, is, subpix_buf, ds.width, ds, cI, 1);
+	    /* get subpixel buffer 
+	     * destination array is float, so multiply step by 4 */
+            getRectSubPix_8u32f(src, is.width, is, subpix_buf, ds.width*4, ds, cI, 1);
+    	    printf("in mat step: %d out mat step: %d\n", is.width, ds.width);
 
 	    CvPoint2D32f cc = cvPoint2D32f(cI.x, cI.y);
             cvGetRectSubPix(&cv_mat, &out_mat, cc);
@@ -357,7 +361,7 @@ void cornerSubPix(unsigned char *src, int cols, int rows,
 		    printf("%d\t%f\t%f\n", i, subpix_buf[i], subpix_buf2[i]);
 	    #endif
 	    printf("%d\n",  (win_w+2) * (win_h+2));
-	    const float* subpix = &subpix_buf2[1 + ds.width];
+	    const float* subpix = &subpix_buf[1 + ds.width];
 
             // process gradient
             for( i = 0, k = 0; i < win_h; i++, subpix += win_w + 2 )
