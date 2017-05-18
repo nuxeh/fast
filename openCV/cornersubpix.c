@@ -300,15 +300,15 @@ void cornerSubPix(unsigned char *src, int cols, int rows,
     if (win.width <= 0 && win.height <= 0)
 	return;
 
-    printf("1\n");
-
     float *mask = malloc(win_h * win_w * sizeof(float));
     float *subpix_buf = malloc((win_h+2) * (win_w+2) * sizeof(float));
-    float *subpix_buf2 = malloc((win_h+2) * (win_w+2) * sizeof(float));
 
+    #ifdef CV_COMPARE
+    float *subpix_buf2 = malloc((win_h+2) * (win_w+2) * sizeof(float));
     CvMat cv_mat = cvMat(rows, cols, CV_8U, src);
     CvMat out_mat = cvMat((win_h+2), (win_w+2), CV_32F, subpix_buf2);
     printf("in mat step: %d out mat step: %d\n", cv_mat.step, out_mat.step);
+    #endif
 
     for( i = 0; i < win_h; i++ )
     {
@@ -335,7 +335,6 @@ void cornerSubPix(unsigned char *src, int cols, int rows,
     // do optimization loop for all the points
     for( int pt_i = 0; pt_i < count; pt_i++ )
     {
-    	printf("%d\n", pt_i);
         Point2f cT = corners[pt_i], cI = cT;
         int iter = 0;
         double err = 0;
@@ -350,23 +349,22 @@ void cornerSubPix(unsigned char *src, int cols, int rows,
 	    /* get subpixel buffer 
 	     * destination array is float, so multiply step by 4 */
             getRectSubPix_8u32f(src, is.width, is, subpix_buf, ds.width*4, ds, cI, 1);
-    	    printf("in mat step: %d out mat step: %d\n", is.width, ds.width);
 
+	    #ifdef CV_COMPARE
 	    CvPoint2D32f cc = cvPoint2D32f(cI.x, cI.y);
             cvGetRectSubPix(&cv_mat, &out_mat, cc);
 
-	    #if 1
 	    printf("w: %d h: %d\n", (win_w+2), (win_h+2));
 	    for (i=0; i < (win_w+2) * (win_h+2); i++)
 		    printf("%d\t%f\t%f\n", i, subpix_buf[i], subpix_buf2[i]);
-	    #endif
 	    printf("%d\n",  (win_w+2) * (win_h+2));
+	    #endif
+
 	    const float* subpix = &subpix_buf[1 + ds.width];
 
             // process gradient
             for( i = 0, k = 0; i < win_h; i++, subpix += win_w + 2 )
             {
-    		//printf("%d\n", i);
                 double py = i - win.height;
 
                 for( j = 0; j < win_w; j++, k++ )
