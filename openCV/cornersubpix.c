@@ -50,10 +50,13 @@
 #include <limits.h>
 #include <float.h>
 
+#include <opencv/cv.h> 
+
 #include "cornersubpix.h"
 
 #include "pgm.x"
 
+#if 0
 static inline int cvFloor(double value)
 {
     int i = (int)value;
@@ -64,6 +67,7 @@ static inline int cvRound(double value)
 {
     return (int)(value + (value >= 0 ? 0.5 : -0.5));
 }
+#endif
 
 enum { SUBPIX_SHIFT=16 };
 
@@ -133,13 +137,64 @@ static const unsigned char* adjustRect(
     return src - rect.x*pix_size;
 }
 
+static void getRectSubPix_8u32f
+( const uchar* src, size_t src_step, Size src_size,
+ float* dst, size_t dst_step, Size win_size, Point2f center0, int cn )
+{
+    Point2f center = center0;
+    Point ip;
+
+    center.x -= (win_size.width-1)*0.5f;
+    center.y -= (win_size.height-1)*0.5f;
+
+    ip.x = cvFloor( center.x );
+    ip.y = cvFloor( center.y );
+
+    if( cn == 1 &&
+       0 <= ip.x && ip.x + win_size.width < src_size.width &&
+       0 <= ip.y && ip.y + win_size.height < src_size.height &&
+       win_size.width > 0 && win_size.height > 0 )
+    {
+        float a = center.x - ip.x;
+        float b = center.y - ip.y;
+        a = MAX(a,0.0001f);
+        float a12 = a*(1.f-b);
+        float a22 = a*b;
+        float b1 = 1.f - b;
+        float b2 = b;
+        double s = (1. - a)/a;
+
+        src_step /= sizeof(src[0]);
+        dst_step /= sizeof(dst[0]);
+
+        // extracted rectangle is totally inside the image
+        src += ip.y * src_step + ip.x;
+
+        for( ; win_size.height--; src += src_step, dst += dst_step )
+        {
+            float prev = (1 - a)*(b1*src[0] + b2*src[src_step]);
+            for( int j = 0; j < win_size.width; j++ )
+            {
+                float t = a12*src[j+1] + a22*src[j+1+src_step];
+                dst[j] = prev + t;
+                prev = (float)(t*s);
+            }
+        }
+    }
+    else
+    {
+        //getRectSubPix_Cn_<uchar, float, float, nop<float>, nop<float> >
+        //(src, src_step, src_size, dst, dst_step, win_size, center0, cn );
+	printf("error\n");
+    }
+}
+
 typedef int _WTp;
 typedef unsigned char _Tp;
 
 void getRectSubPix(unsigned char *src, size_t src_step, Size src_size,
-                   float *dst, size_t dst_step, Size win_size, Point2f center)
+                   float *dst, size_t dst_step, Size win_size, Point2f center, int cn)
 {
-    int cn = 1;
     Point ip;
     _WTp a11, a12, a21, a22, b1, b2;
     float a, b;
@@ -232,6 +287,7 @@ void cornerSubPix(unsigned char *src, int cols, int rows,
     const int MAX_ITERS = 100;
     Size win = {ww, wh};
     int win_w = win.width * 2 + 1, win_h = win.height * 2 + 1;
+    printf("win_w=%d win_h=%d\n", win_w, win_h);
     int i, j, k;
     int max_iters = SPX_ITERS;
 
@@ -244,8 +300,14 @@ void cornerSubPix(unsigned char *src, int cols, int rows,
     if (win.width <= 0 && win.height <= 0)
 	return;
 
+    printf("1\n");
+
     float *mask = malloc(win_h * win_w * sizeof(float));
     float *subpix_buf = malloc((win_h+2) * (win_w+2) * sizeof(float));
+    float *subpix_buf2 = malloc((win_h+2) * (win_w+2) * sizeof(float));
+
+    CvMat cv_mat = cvMat(rows, cols, CV_8U, src);
+    CvMat out_mat = cvMat((win_h+2), (win_w+2), CV_32F, subpix_buf2);
 
     for( i = 0; i < win_h; i++ )
     {
@@ -258,24 +320,21 @@ void cornerSubPix(unsigned char *src, int cols, int rows,
         }
     }
 
-#if 0
+#if 1
     // make zero_zone
-    if( zeroZone.width >= 0 && zeroZone.height >= 0 &&
-        zeroZone.width * 2 + 1 < win_w && zeroZone.height * 2 + 1 < win_h )
-    {
-        for( i = win.height - zeroZone.height; i <= win.height + zeroZone.height; i++ )
+        for( i = win.height - (win.height/2); i <= win.height + (win.width/2); i++ )
         {
-            for( j = win.width - zeroZone.width; j <= win.width + zeroZone.width; j++ )
+            for( j = win.width - (win.height/2); j <= win.width + (win.width/2); j++ )
             {
                 mask[i * win_w + j] = 0;
             }
         }
-    }
 #endif
 
     // do optimization loop for all the points
     for( int pt_i = 0; pt_i < count; pt_i++ )
     {
+    	printf("%d\n", pt_i);
         Point2f cT = corners[pt_i], cI = cT;
         int iter = 0;
         double err = 0;
@@ -287,13 +346,23 @@ void cornerSubPix(unsigned char *src, int cols, int rows,
 
 	    Size ds = {win_w+2, win_h+2};
 	    Size is = {cols, rows};
-            getRectSubPix(src, is.width, is, subpix_buf, ds.width, ds, cI);
+            getRectSubPix_8u32f(src, is.width, is, subpix_buf, ds.width, ds, cI, 1);
 
-	    const float* subpix = &subpix_buf[1 + ds.width];
+	    CvPoint2D32f cc = cvPoint2D32f(cI.x, cI.y);
+            cvGetRectSubPix(&cv_mat, &out_mat, cc);
+
+	    #if 1
+	    printf("w: %d h: %d\n", (win_w+2), (win_h+2));
+	    for (i=0; i < (win_w+2) * (win_h+2); i++)
+		    printf("%d\t%f\t%f\n", i, subpix_buf[i], subpix_buf2[i]);
+	    #endif
+	    printf("%d\n",  (win_w+2) * (win_h+2));
+	    const float* subpix = &subpix_buf2[1 + ds.width];
 
             // process gradient
             for( i = 0, k = 0; i < win_h; i++, subpix += win_w + 2 )
             {
+    		//printf("%d\n", i);
                 double py = i - win.height;
 
                 for( j = 0; j < win_w; j++, k++ )
@@ -332,6 +401,8 @@ void cornerSubPix(unsigned char *src, int cols, int rows,
 
         // if new point is too far from initial, it means poor convergence.
         // leave initial point as the result
+	printf("corner: x: %f y: %f\n", cI.x, cI.y);
+	printf("corner: x: %f y: %f\n", cT.x, cT.y);
         if( fabs( cI.x - cT.x ) > win.width || fabs( cI.y - cT.y ) > win.height )
             cI = cT;
 
@@ -352,7 +423,7 @@ int main(int argc, char **argv)
 	Point2f c[] = {{3339.0, 856.0}};
 	int count = 1;
 
-	cornerSubPix(img, w, h, c, count, 10, 10);
+	cornerSubPix(img, w, h, c, count, 27, 27);
 
 	pgm_write("/tmp/1.pgm", w, h, img);
 

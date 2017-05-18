@@ -23,3 +23,5 @@ typedef struct Size {
 } Size;
 
 typedef unsigned char uchar;
+
+#define MAX(a,b)  ((a) < (b) ? (b) : (a))
