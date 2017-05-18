@@ -50,13 +50,10 @@
 #include <limits.h>
 #include <float.h>
 
-#include <opencv/cv.h> 
-
-#include "cornersubpix.h"
+#include "cv_cornersubpix.h"
 
 #include "pgm.x"
 
-#if 0
 static inline int cvFloor(double value)
 {
     int i = (int)value;
@@ -67,7 +64,6 @@ static inline int cvRound(double value)
 {
     return (int)(value + (value >= 0 ? 0.5 : -0.5));
 }
-#endif
 
 enum { SUBPIX_SHIFT=16 };
 
@@ -135,58 +131,6 @@ static const unsigned char* adjustRect(
 
     *pRect = rect;
     return src - rect.x*pix_size;
-}
-
-static void getRectSubPix_8u32f
-( const uchar* src, size_t src_step, Size src_size,
- float* dst, size_t dst_step, Size win_size, Point2f center0, int cn )
-{
-    Point2f center = center0;
-    Point ip;
-
-    center.x -= (win_size.width-1)*0.5f;
-    center.y -= (win_size.height-1)*0.5f;
-
-    ip.x = cvFloor( center.x );
-    ip.y = cvFloor( center.y );
-
-    if( cn == 1 &&
-       0 <= ip.x && ip.x + win_size.width < src_size.width &&
-       0 <= ip.y && ip.y + win_size.height < src_size.height &&
-       win_size.width > 0 && win_size.height > 0 )
-    {
-        float a = center.x - ip.x;
-        float b = center.y - ip.y;
-        a = MAX(a,0.0001f);
-        float a12 = a*(1.f-b);
-        float a22 = a*b;
-        float b1 = 1.f - b;
-        float b2 = b;
-        double s = (1. - a)/a;
-
-        src_step /= sizeof(src[0]);
-        dst_step /= sizeof(dst[0]);
-
-        // extracted rectangle is totally inside the image
-        src += ip.y * src_step + ip.x;
-
-        for( ; win_size.height--; src += src_step, dst += dst_step )
-        {
-            float prev = (1 - a)*(b1*src[0] + b2*src[src_step]);
-            for( int j = 0; j < win_size.width; j++ )
-            {
-                float t = a12*src[j+1] + a22*src[j+1+src_step];
-                dst[j] = prev + t;
-                prev = (float)(t*s);
-            }
-        }
-    }
-    else
-    {
-        //getRectSubPix_Cn_<uchar, float, float, nop<float>, nop<float> >
-        //(src, src_step, src_size, dst, dst_step, win_size, center0, cn );
-	printf("error\n");
-    }
 }
 
 typedef int _WTp;
@@ -278,6 +222,60 @@ void getRectSubPix(unsigned char *src, size_t src_step, Size src_size,
     }
 }
 
+static void getRectSubPix_8u32f
+( const uchar* src, size_t src_step, Size src_size,
+ float* dst, size_t dst_step, Size win_size, Point2f center0, int cn )
+{
+    Point2f center = center0;
+    Point ip;
+
+    center.x -= (win_size.width-1)*0.5f;
+    center.y -= (win_size.height-1)*0.5f;
+
+    ip.x = cvFloor( center.x );
+    ip.y = cvFloor( center.y );
+
+    if( cn == 1 &&
+       0 <= ip.x && ip.x + win_size.width < src_size.width &&
+       0 <= ip.y && ip.y + win_size.height < src_size.height &&
+       win_size.width > 0 && win_size.height > 0 )
+    {
+        float a = center.x - ip.x;
+        float b = center.y - ip.y;
+        a = MAX(a,0.0001f);
+        float a12 = a*(1.f-b);
+        float a22 = a*b;
+        float b1 = 1.f - b;
+        float b2 = b;
+        double s = (1. - a)/a;
+
+        src_step /= sizeof(src[0]);
+        dst_step /= sizeof(dst[0]);
+
+        // extracted rectangle is totally inside the image
+        src += ip.y * src_step + ip.x;
+
+        for( ; win_size.height--; src += src_step, dst += dst_step )
+        {
+            float prev = (1 - a)*(b1*src[0] + b2*src[src_step]);
+            for( int j = 0; j < win_size.width; j++ )
+            {
+                float t = a12*src[j+1] + a22*src[j+1+src_step];
+                dst[j] = prev + t;
+                prev = (float)(t*s);
+            }
+        }
+    }
+    else
+    {
+	/* the following may be required if the corner is very close to the
+	 * edge of the image, although this is currently not used */
+        //getRectSubPix_Cn_<uchar, float, float, nop<float>, nop<float> >
+        //(src, src_step, src_size, dst, dst_step, win_size, center0, cn );
+	return;
+    }
+}
+
 #define SPX_EPS 0.000001
 #define SPX_ITERS 100
 
@@ -302,13 +300,6 @@ void cornerSubPix(unsigned char *src, int cols, int rows,
 
     float *mask = malloc(win_h * win_w * sizeof(float));
     float *subpix_buf = malloc((win_h+2) * (win_w+2) * sizeof(float));
-
-    #ifdef CV_COMPARE
-    float *subpix_buf2 = malloc((win_h+2) * (win_w+2) * sizeof(float));
-    CvMat cv_mat = cvMat(rows, cols, CV_8U, src);
-    CvMat out_mat = cvMat((win_h+2), (win_w+2), CV_32F, subpix_buf2);
-    printf("in mat step: %d out mat step: %d\n", cv_mat.step, out_mat.step);
-    #endif
 
     for( i = 0; i < win_h; i++ )
     {
@@ -344,21 +335,11 @@ void cornerSubPix(unsigned char *src, int cols, int rows,
             Point2f cI2;
             double a = 0, b = 0, c = 0, bb1 = 0, bb2 = 0;
 
-	    Size ds = {win_w+2, win_h+2};
-	    Size is = {cols, rows};
 	    /* get subpixel buffer 
 	     * destination array is float, so multiply step by 4 */
+	    Size is = {cols, rows};
+	    Size ds = {win_w+2, win_h+2};
             getRectSubPix_8u32f(src, is.width, is, subpix_buf, ds.width*4, ds, cI, 1);
-
-	    #ifdef CV_COMPARE
-	    CvPoint2D32f cc = cvPoint2D32f(cI.x, cI.y);
-            cvGetRectSubPix(&cv_mat, &out_mat, cc);
-
-	    printf("w: %d h: %d\n", (win_w+2), (win_h+2));
-	    for (i=0; i < (win_w+2) * (win_h+2); i++)
-		    printf("%d\t%f\t%f\n", i, subpix_buf[i], subpix_buf2[i]);
-	    printf("%d\n",  (win_w+2) * (win_h+2));
-	    #endif
 
 	    const float* subpix = &subpix_buf[1 + ds.width];
 
