@@ -211,6 +211,38 @@ int terrain_fill_seed(struct image *q, int xs, int ys, int bs, int id)
 
 	get_circle(&cc, bs);
 	get_circle(&cf, (bs * 15) / 10);
+	printf("%d\n", cc.l);
+	printf("%d\n", cf.l);
+
+	int e;
+	float k = (float) cc.l / 16;
+	for (e = 0; e < cc.l; e++)
+		printf("#");
+	printf("\n");
+	printf("%f\n", k);
+
+	int qu[16] = {0};
+
+	for (e = 0; e < 16; e++) {
+		int q = roundf(k * e);
+		printf("%d\n", q);
+		qu[e] = q;
+	}
+
+	for (e = 0; e < cc.l; e++) {
+		int f;
+		int found = 0;
+		for (f = 0; f < 16; f++) {
+			if (e == qu[f]) {
+				printf("#");
+				found = 1;
+				break;
+			}
+		}
+		if (!found)
+			printf("_");
+	}
+	printf("\n");
 
 	while (fill_stack_pop(&s, w, &x, &y))
 	{
