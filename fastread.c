@@ -257,7 +257,7 @@ int main(int argc, char **argv)
 	q.scratch = malloc(q.w * q.h * sizeof(q.scratch[0]));
 	memset(q.scratch, 0, q.w * q.h * sizeof(q.scratch[0]));
 
-	terrain_fill_seed(&q, 10, 10, 5, 128);
+	terrain_fill_seed(&q, 81, 81, 5, 128);
 
 	pgm_write("/tmp/ff.pgm", q.w, q.h, q.scratch);
 
