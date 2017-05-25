@@ -89,10 +89,15 @@ struct quirc_point * circle(unsigned char *img, int xc, int yc, int r, int *al)
 	return c_pixels;
 }
 
+#define DEBUG_FILL_STACK
+
 struct fill_stack {
 	int		*stack;
 	unsigned int	pointer;
 	unsigned int	size;
+#ifdef DEBUG_FILL_STACK
+	unsigned int	max_depth;
+#endif
 };
 
 // flags?
@@ -119,6 +124,9 @@ static int fill_stack_push(struct fill_stack *s, int st, int x, int y)
 	{
 		s->pointer++;
 		s->stack[s->pointer] = x + y * st;
+#ifdef DEBUG_FILL_STACK
+		if (s->pointer > s->max_depth) s->max_depth = s->pointer;
+#endif
 		return 1;
 	}
 	else
@@ -186,7 +194,9 @@ int terrain_fill_seed(struct image *q, int xs, int ys, int bs, int id)
 	s.pointer = 0;
 	s.size = 1000;
 	s.stack = malloc(1000 * sizeof(int));
-
+#ifdef DEBUG_FILL_STACK
+	s.max_depth = 0;
+#endif
 	fill_stack_push(&s, w, xs, ys);
 
 	while (fill_stack_pop(&s, w, &x, &y))
@@ -224,6 +234,9 @@ int terrain_fill_seed(struct image *q, int xs, int ys, int bs, int id)
 			fill_stack_push(&s, w, nx, ny);
 	}
 
+#ifdef DEBUG_FILL_STACK
+	printf("max stack depth: %d\n", s.max_depth);
+#endif
 	free(s.stack);
 }
 
