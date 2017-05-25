@@ -9,6 +9,7 @@
 
 struct image {
 	unsigned char 	*pixels;
+	unsigned cha	*scratch;
 	int		w;
 	int		h;
 };
@@ -88,29 +89,40 @@ void circle(unsigned char *img, int xc, int yc, int r, int *al)
 	return c_pixels;
 }
 
-static inline int val_edge_px(struct image *q, struct quirc_point p)
+static inline int validate_edge_px(struct image *q, struct quirc_point p)
 {
-	int n;
-	static const int dx[8] = { 0,  1,  1,  1,  0, -1, -1, -1};
-	static const int dy[8] = {-1, -1,  0,  1,  1,  1,  0, -1};
+	int le = p.x > 0;
+	int re = p.x < q->w;
+	int te = p.y > 0;
+	int be = p.y < q->h;
+	int i = p.x + p.y * q->w;
 
+	/* N E S W */
+	if (te && q->pixels[i - q->w] == PIXEL_WHITE)
+		return 1;
+	if (re && q->pixels[i + 1]    == PIXEL_WHITE)
+		return 1;
+	if (be && q->pixels[i + q->w] == PIXEL_WHITE)
+		return 1;
+	if (le && q->pixels[i - 1]    == PIXEL_WHITE)
+		return 1;
 
-	for(n = 0; i < 8; i++) {
-		x = p.x + dx[n];
-		y = p.y + dy[n];
-		i = x + y * q->w;
+	/* NE SE SW NW */
+	if (te && re && q->pixels[i - q->w + 1] == PIXEL_WHITE)
+		return 1;
+	if (re && be && q->pixels[i + 1 + q->w] == PIXEL_WHITE)
+		return 1;
+	if (be && le && q->pixels[i + q->w - 1] == PIXEL_WHITE)
+		return 1;
+	if (le && te && q->pixels[i - 1 - q->w] == PIXEL_WHITE)
+		return 1;
 
-	if(nx > 0 && nx < w && ny > 0 && ny < h && screenBuffer[ny][nx] == PIXEL_WHITE) {
-	if (p.x > 0 && q->pixels[i - 1] == PIXEL_WHITE)
-		return 0;
-	if (p.x < q->w && q->pixels[i + 1] == PIXEL_WHITE)
-		return 0;
-	if (p.y > 0 && q->pixels[i - q->w] == PIXEL_WHITE)
-		return 0;
-	if (p.y < q->h && q->pixels[i + q->w] == PIXEL_WHITE)
-		return 0;
+	return 0;
+}
 
-	return -1;
+int terrain_fill_seed(struct image *q, int x, int y, int bs, int id)
+{
+
 }
 
 int main(void)
