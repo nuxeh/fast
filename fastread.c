@@ -202,8 +202,8 @@ int terrain_fill_seed(struct image *q, int xs, int ys, int bs, int id)
 	struct circle cf;
 
 	s.pointer = 0;
-	s.size = 1000;
-	s.stack = malloc(1000 * sizeof(int));
+	s.size = 10000;
+	s.stack = malloc(10000 * sizeof(int));
 #ifdef DEBUG_FILL_STACK
 	s.max_depth = 0;
 #endif
