@@ -159,6 +159,9 @@ static int validate_edge_px(struct image *q, int x, int y)
 	if (q->pixels[i] == PIXEL_WHITE)
 		return 0;
 
+	if (q->scratch[i] != 0)
+		return 0;
+
 	/* N E S W */
 	if (te && q->pixels[i - q->w] == PIXEL_WHITE)
 		return 1;
