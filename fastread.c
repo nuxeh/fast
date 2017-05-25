@@ -89,13 +89,65 @@ void circle(unsigned char *img, int xc, int yc, int r, int *al)
 	return c_pixels;
 }
 
-static inline int validate_edge_px(struct image *q, struct quirc_point p)
+struct fill_stack {
+	int		*stack;
+	unsigned int	pointer;
+	unsigned int	size;
+};
+
+// flags?
+
+static int fill_stack_pop(struct fill_stack *s, int st, int *x, int *y)
 {
-	int le = p.x > 0;
-	int re = p.x < q->w;
-	int te = p.y > 0;
-	int be = p.y < q->h;
-	int i = p.x + p.y * q->w;
+	if(s->pointer > 0)
+	{
+		int p = s->stack[s->pointer];
+		*y = p / st;
+		*x = p % st;
+		s->pointer--;
+		return 1;
+	}
+	else
+	{
+		return 0;
+	}
+}
+
+static int fill_stack_push(struct fill_stack *s, int st, int x, int y)
+{
+	if(s->pointer < s->size - 1)
+	{
+		s->pointer++;
+		s->stack[s->pointer] = x + y * st;
+		return 1;
+	}
+	else
+	{
+		return 0;
+	}
+}
+
+void emptyStack(struct fill_stack *s)
+{
+	int x, y;
+	while(pop(x, y));
+}
+
+/*
+ * Check 8 neighbouring pixels for pixel being on an edge
+ *
+ * Pixel is on an edge if it has at least one white neighbour
+ *
+ */
+static int validate_edge_px(struct image *q, int x, int y)
+{
+	int le = x > 0;
+	int re = x < q->w;
+	int te = y > 0;
+	int be = y < q->h;
+	int i = x + y * q->w;
+
+	// Skip if already covered?
 
 	/* N E S W */
 	if (te && q->pixels[i - q->w] == PIXEL_WHITE)
@@ -122,7 +174,38 @@ static inline int validate_edge_px(struct image *q, struct quirc_point p)
 
 int terrain_fill_seed(struct image *q, int x, int y, int bs, int id)
 {
+	int le = p.x > 0;
+	int re = p.x < q->w;
+	int te = p.y > 0;
+	int be = p.y < q->h;
+	int i = p.x + p.y * q->w;
 
+	int nx, ny;
+	struct fill_stack s;
+	s.pointer = 0;
+	s.stack = malloc(1000 * sizeof(int));
+
+	/* N E S W */
+	if (te && validate_edge_px(q, nx = x, ny = y-1))
+		fill_stack_push(s, nx, ny);
+	if (re && validate_edge_px(q, nx = x+1, ny = y))
+		fill_stack_push(s, nx, ny);
+	if (be && validate_edge_px(q, nx = x, ny = y+1))
+		fill_stack_push(s, nx, ny);
+	if (le && validate_edge_px(q, nx = x-1, ny = y))
+		fill_stack_push(s, nx, ny);
+
+	/* NE SE SW NW */
+	if (te && le && validate_edge_px(q, nx = x+1, ny = y-1))
+		fill_stack_push(s, nx, ny);
+	if (re && be && validate_edge_px(q, nx = x+1, ny = y+1))
+		fill_stack_push(s, nx, ny);
+	if (be && le && validate_edge_px(q, nx = x-1, ny = y+1))
+		fill_stack_push(s, nx, ny);
+	if (le && te && validate_edge_px(q, nx = x-1, ny = y-1))
+		fill_stack_push(s, nx, ny);
+
+	free(s);
 }
 
 int main(void)
