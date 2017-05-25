@@ -149,6 +149,9 @@ static int validate_edge_px(struct image *q, int x, int y)
 
 	// Skip if already covered?
 
+	if (q->pixels[i] == PIXEL_WHITE)
+		return 0;
+
 	/* N E S W */
 	if (te && q->pixels[i - q->w] == PIXEL_WHITE)
 		return 1;
@@ -172,56 +175,76 @@ static int validate_edge_px(struct image *q, int x, int y)
 	return 0;
 }
 
-int terrain_fill_seed(struct image *q, int x, int y, int bs, int id)
+int terrain_fill_seed(struct image *q, int xs, int ys, int bs, int id)
 {
-	int le = p.x > 0;
-	int re = p.x < q->w;
-	int te = p.y > 0;
-	int be = p.y < q->h;
-	int i = p.x + p.y * q->w;
 
+	int x, y, i;
+	int le, re, te, be;
 	int nx, ny;
+	int w = q->w;
 	struct fill_stack s;
+
 	s.pointer = 0;
+	s.size = 1000;
 	s.stack = malloc(1000 * sizeof(int));
 
-	/* N E S W */
-	if (te && validate_edge_px(q, nx = x, ny = y-1))
-		fill_stack_push(s, nx, ny);
-	if (re && validate_edge_px(q, nx = x+1, ny = y))
-		fill_stack_push(s, nx, ny);
-	if (be && validate_edge_px(q, nx = x, ny = y+1))
-		fill_stack_push(s, nx, ny);
-	if (le && validate_edge_px(q, nx = x-1, ny = y))
-		fill_stack_push(s, nx, ny);
+	fill_stack_push(&s, w, xs, ys);
 
-	/* NE SE SW NW */
-	if (te && le && validate_edge_px(q, nx = x+1, ny = y-1))
-		fill_stack_push(s, nx, ny);
-	if (re && be && validate_edge_px(q, nx = x+1, ny = y+1))
-		fill_stack_push(s, nx, ny);
-	if (be && le && validate_edge_px(q, nx = x-1, ny = y+1))
-		fill_stack_push(s, nx, ny);
-	if (le && te && validate_edge_px(q, nx = x-1, ny = y-1))
-		fill_stack_push(s, nx, ny);
+	while (fill_stack_pop(&s, &x, &y))
+	{
+		i = x + y * q->w;
+
+		if (q->scratch[i] == id)
+			continue;
+
+		q->scratch[i] = id;
+
+		le = p.x > 0;
+		re = p.x < q->w;
+		te = p.y > 0;
+		be = p.y < q->h;
+
+		/* N E S W */
+		if (te && validate_edge_px(q, nx = x, ny = y-1))
+			fill_stack_push(s, w, nx, ny);
+		if (re && validate_edge_px(q, nx = x+1, ny = y))
+			fill_stack_push(s, w, nx, ny);
+		if (be && validate_edge_px(q, nx = x, ny = y+1))
+			fill_stack_push(s, w, nx, ny);
+		if (le && validate_edge_px(q, nx = x-1, ny = y))
+			fill_stack_push(s, w, nx, ny);
+
+		/* NE SE SW NW */
+		if (te && le && validate_edge_px(q, nx = x+1, ny = y-1))
+			fill_stack_push(s, w, nx, ny);
+		if (re && be && validate_edge_px(q, nx = x+1, ny = y+1))
+			fill_stack_push(s, w, nx, ny);
+		if (be && le && validate_edge_px(q, nx = x-1, ny = y+1))
+			fill_stack_push(s, w, nx, ny);
+		if (le && te && validate_edge_px(q, nx = x-1, ny = y-1))
+			fill_stack_push(s, w, nx, ny);
+	}
 
 	free(s);
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
+	#if 0
 	unsigned char *imgc = malloc(1000 * 1000);
 	memset(imgc, 255, 1000 * 1000);
-
 	circle(imgc, 50, 50, 15);
-
 	pgm_write("/tmp/bcirc.pgm", 100, 100, imgc);
-
+	#endif
 
 	unsigned char *img;
+	struct image q;
 	int w, h;
+	q->pixels = pgm_read(argv[1], q->w, q->h);
+	q->scratch = malloc(w * h * sizeof(q->scratch[0]));
+	memset(q->scratch, 0, w * h * sizeof(q->scratch[0]));
 
-	pgm_write("/tmp/1.pgm", w, h, img);
+	terrain_fill_seed(q, 10, 10, 5, 1);
 
-	free(img);
+	free(q->pixels);
 }
