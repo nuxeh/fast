@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 #include "pgm.x"
 
@@ -33,13 +34,18 @@ static inline void set_point(struct quirc_point *p, int m, int i, int x, int y)
 	p[i].y = y;
 }
 
+struct circle {
+	struct quirc_point	*array;
+	int 			r;
+	int			l;
+};
+
 /* Bressenham circle */
-struct quirc_point * circle(unsigned char *img, int xc, int yc, int r, int *al)
+void get_circle(struct circle *c, int r)
 {
 	int d, x, y, p, i, l;
 
 	int ii = 0;
-	struct quirc_point *c_pixels;
 
 	d = 3 - 2 * r;
 	x = 0;
@@ -57,24 +63,22 @@ struct quirc_point * circle(unsigned char *img, int xc, int yc, int r, int *al)
 
 	p = x;
 	l = (p-1) * 8;
-	c_pixels = malloc(l * sizeof(struct quirc_point));
-	memset(c_pixels, 0, l * sizeof(struct quirc_point));
-
-	printf("x: %d\n", p);
+	c->array = malloc(l * sizeof(struct quirc_point));
+	memset(c->array, 0, l * sizeof(struct quirc_point));
 
 	d = 3 - 2 * r;
 	x = 0;
 	y = r;
 	while (x <= y)
 	{
-		set_point(c_pixels, l, x,	  +x, -y);
-		set_point(c_pixels, l, (2*p)-x-2, +y, -x);
-		set_point(c_pixels, l, (2*p)+x-2, +y, +x);
-		set_point(c_pixels, l, (4*p)-x-4, +x, +y);
-		set_point(c_pixels, l, (4*p)+x-4, -x, +y);
-		set_point(c_pixels, l, (6*p)-x-6, -y, +x);
-		set_point(c_pixels, l, (6*p)+x-6, -y, -x);
-		set_point(c_pixels, l, (8*p)-x-8, -x, -y);
+		set_point(c->array, l, x,	  +x, -y);
+		set_point(c->array, l, (2*p)-x-2, +y, -x);
+		set_point(c->array, l, (2*p)+x-2, +y, +x);
+		set_point(c->array, l, (4*p)-x-4, +x, +y);
+		set_point(c->array, l, (4*p)+x-4, -x, +y);
+		set_point(c->array, l, (6*p)-x-6, -y, +x);
+		set_point(c->array, l, (6*p)+x-6, -y, -x);
+		set_point(c->array, l, (8*p)-x-8, -x, -y);
 
 		if(d <= 0) {
 			d = d + 4 * x + 6;
@@ -85,8 +89,8 @@ struct quirc_point * circle(unsigned char *img, int xc, int yc, int r, int *al)
 		x++;
 	}
 
-	*al = l;
-	return c_pixels;
+	c->r = r;
+	c->l = l;
 }
 
 #define DEBUG_FILL_STACK
@@ -194,6 +198,9 @@ int terrain_fill_seed(struct image *q, int xs, int ys, int bs, int id)
 	int w = q->w;
 	struct fill_stack s;
 
+	struct circle cc;
+	struct circle cf;
+
 	s.pointer = 0;
 	s.size = 1000;
 	s.stack = malloc(1000 * sizeof(int));
@@ -201,6 +208,9 @@ int terrain_fill_seed(struct image *q, int xs, int ys, int bs, int id)
 	s.max_depth = 0;
 #endif
 	fill_stack_push(&s, w, xs, ys);
+
+	get_circle(&cc, bs);
+	get_circle(&cf, (bs * 15) / 10);
 
 	while (fill_stack_pop(&s, w, &x, &y))
 	{
