@@ -4,6 +4,15 @@
 
 #include "pgm.x"
 
+#define PIXEL_WHITE 255
+#define PIXEL_BLACK 0
+
+struct image {
+	unsigned char 	*pixels;
+	int		w;
+	int		h;
+};
+
 struct quirc_point {
 	int x;
 	int y;
@@ -24,7 +33,7 @@ static inline void set_point(struct quirc_point *p, int m, int i, int x, int y)
 }
 
 /* Bressenham circle */
-void circle(unsigned char *img, int xc, int yc, int r)
+void circle(unsigned char *img, int xc, int yc, int r, int *al)
 {
 	int d, x, y, p, i, l;
 
@@ -74,7 +83,25 @@ void circle(unsigned char *img, int xc, int yc, int r)
 		}
 		x++;
 	}
-	free(c_pixels);
+
+	*al = l;
+	return c_pixels;
+}
+
+static inline int val_edge_px(struct image *q, struct quirc_point p)
+{
+	int i = p.x + p.y * q->w;
+
+	if (p.x > 0 && q->pixels[i - 1] == PIXEL_WHITE)
+		return 0;
+	if (p.x < q->w && q->pixels[i + 1] == PIXEL_WHITE)
+		return 0;
+	if (p.y > 0 && q->pixels[i - q->w] == PIXEL_WHITE)
+		return 0;
+	if (p.y < q->h && q->pixels[i + q->w] == PIXEL_WHITE)
+		return 0;
+
+	return -1;
 }
 
 int main(void)
