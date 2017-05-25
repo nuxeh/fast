@@ -90,8 +90,17 @@ void circle(unsigned char *img, int xc, int yc, int r, int *al)
 
 static inline int val_edge_px(struct image *q, struct quirc_point p)
 {
-	int i = p.x + p.y * q->w;
+	int n;
+	static const int dx[8] = { 0,  1,  1,  1,  0, -1, -1, -1};
+	static const int dy[8] = {-1, -1,  0,  1,  1,  1,  0, -1};
 
+
+	for(n = 0; i < 8; i++) {
+		x = p.x + dx[n];
+		y = p.y + dy[n];
+		i = x + y * q->w;
+
+	if(nx > 0 && nx < w && ny > 0 && ny < h && screenBuffer[ny][nx] == PIXEL_WHITE) {
 	if (p.x > 0 && q->pixels[i - 1] == PIXEL_WHITE)
 		return 0;
 	if (p.x < q->w && q->pixels[i + 1] == PIXEL_WHITE)
