@@ -36,8 +36,10 @@ static inline void set_point(struct quirc_point *p, int m, int i, int x, int y)
 
 struct circle {
 	struct quirc_point	*array;
+	struct quirc_point	*segments;
 	int 			r;
 	int			l;
+	int			ns;
 };
 
 /* Bressenham circle */
@@ -91,6 +93,29 @@ void get_circle(struct circle *c, int r)
 
 	c->r = r;
 	c->l = l;
+}
+
+int get_circle_segments(struct circle *c, int n)
+{
+	int e, i;
+	float k = (float) c->l / n;
+
+	c->segments = malloc(n * sizeof(struct quirc_point));
+
+	for (e = 0; e < n; e++) {
+		i = roundf(k * e);
+		c->segments[e] = c->array[i];
+	}
+
+	c->ns = n;
+}
+
+void destroy_circle(struct circle *c)
+{
+	if (c->array)
+		free(c->array);
+	if (c->segments)
+		free(c->segments);
 }
 
 #define DEBUG_FILL_STACK
@@ -210,39 +235,11 @@ int terrain_fill_seed(struct image *q, int xs, int ys, int bs, int id)
 	fill_stack_push(&s, w, xs, ys);
 
 	get_circle(&cc, bs);
-	get_circle(&cf, (bs * 15) / 10);
-	printf("%d\n", cc.l);
-	printf("%d\n", cf.l);
+	get_circle_segments(&cc, 8);
 
 	int e;
-	float k = (float) cc.l / 16;
-	for (e = 0; e < cc.l; e++)
-		printf("#");
-	printf("\n");
-	printf("%f\n", k);
-
-	int qu[16] = {0};
-
-	for (e = 0; e < 16; e++) {
-		int q = roundf(k * e);
-		printf("%d\n", q);
-		qu[e] = q;
-	}
-
-	for (e = 0; e < cc.l; e++) {
-		int f;
-		int found = 0;
-		for (f = 0; f < 16; f++) {
-			if (e == qu[f]) {
-				printf("#");
-				found = 1;
-				break;
-			}
-		}
-		if (!found)
-			printf("_");
-	}
-	printf("\n");
+	for (e = 0; e<8; e++)
+		printf("%d,%d\n", cc.segments[e].x, cc.segments[e].y);
 
 	while (fill_stack_pop(&s, w, &x, &y))
 	{
