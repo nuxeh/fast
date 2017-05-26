@@ -224,7 +224,7 @@ static int validate_edge_px(struct image *q, int x, int y)
  *  min - minimum number of segments needed for corner
  *
  */
-int fast_sample(struct image *q, struct circle *c, int i, int min)
+int fast_sample(struct image *q, struct circle *c, int i, int thresh)
 {
 	int j;
 	int count = 0;
@@ -236,7 +236,9 @@ int fast_sample(struct image *q, struct circle *c, int i, int min)
 			count++;
 	}
 
-	if (count > min)
+	if (count > thresh)
+		q->scratch[i] = 250;
+	if (c->ns - count > thresh + 1)
 		q->scratch[i] = 250;
 }
 
@@ -262,7 +264,8 @@ int terrain_fill_seed(struct image *q, int xs, int ys, int bs, int id)
 
 	get_circle(&cc, bs/2);
 	get_circle(&cf, (int) roundf((float) bs * 1.5));
-	get_circle_segments(&cc, 8);
+	get_circle_segments(&cc, 16);
+	int c_thresh = (cc.ns / 2) + 2;
 
 	int e;
 	for (e = 0; e<8; e++)
@@ -277,7 +280,7 @@ int terrain_fill_seed(struct image *q, int xs, int ys, int bs, int id)
 
 		q->scratch[i] = id;
 
-		fast_sample(q, &cc, i, 4);
+		fast_sample(q, &cc, i, c_thresh);
 
 		le = x > 0;
 		re = x < q->w;
