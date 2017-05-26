@@ -214,6 +214,32 @@ static int validate_edge_px(struct image *q, int x, int y)
 	return 0;
 }
 
+/*
+ * Use a FAST-like method for sampling potential corners
+ *
+ *  q   - image structure
+ *  c   - circle used for sampling
+ *  w   - image width
+ *  i   - index of centre pixel
+ *  min - minimum number of segments needed for corner
+ *
+ */
+int fast_sample(struct image *q, struct circle *c, int i, int min)
+{
+	int j;
+	int count = 0;
+	struct quirc_point *o = c->segments;
+
+	for (j = 0; j < c->ns; j++)
+	{
+		if (q->pixels[i + o[j].x + q->w * o[j].y] == PIXEL_WHITE)
+			count++;
+	}
+
+	if (count > min)
+		q->scratch[i] = 250;
+}
+
 int terrain_fill_seed(struct image *q, int xs, int ys, int bs, int id)
 {
 
@@ -234,7 +260,7 @@ int terrain_fill_seed(struct image *q, int xs, int ys, int bs, int id)
 #endif
 	fill_stack_push(&s, w, xs, ys);
 
-	get_circle(&cc, bs);
+	get_circle(&cc, bs/2);
 	get_circle(&cf, (int) roundf((float) bs * 1.5));
 	get_circle_segments(&cc, 8);
 
@@ -250,6 +276,8 @@ int terrain_fill_seed(struct image *q, int xs, int ys, int bs, int id)
 			continue;
 
 		q->scratch[i] = id;
+
+		fast_sample(q, &cc, i, 4);
 
 		le = x > 0;
 		re = x < q->w;
