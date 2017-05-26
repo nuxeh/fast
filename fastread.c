@@ -235,6 +235,7 @@ int terrain_fill_seed(struct image *q, int xs, int ys, int bs, int id)
 	fill_stack_push(&s, w, xs, ys);
 
 	get_circle(&cc, bs);
+	get_circle(&cf, (int) roundf((float) bs * 1.5));
 	get_circle_segments(&cc, 8);
 
 	int e;
