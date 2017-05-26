@@ -147,12 +147,43 @@ static int fill_stack_pop(struct fill_stack *s, int st, int *x, int *y)
 	}
 }
 
+static int fill_stack_pop_i(struct fill_stack *s, int *i)
+{
+	if(s->pointer > 0)
+	{
+		*i = s->stack[s->pointer];
+		s->pointer--;
+		return 1;
+	}
+	else
+	{
+		return 0;
+	}
+}
+
 static int fill_stack_push(struct fill_stack *s, int st, int x, int y)
 {
 	if(s->pointer < s->size - 1)
 	{
 		s->pointer++;
 		s->stack[s->pointer] = x + y * st;
+#ifdef DEBUG_FILL_STACK
+		if (s->pointer > s->max_depth) s->max_depth = s->pointer;
+#endif
+		return 1;
+	}
+	else
+	{
+		return 0;
+	}
+}
+
+static int fill_stack_push_i(struct fill_stack *s, int i)
+{
+	if(s->pointer < s->size - 1)
+	{
+		s->pointer++;
+		s->stack[s->pointer] = i;
 #ifdef DEBUG_FILL_STACK
 		if (s->pointer > s->max_depth) s->max_depth = s->pointer;
 #endif
@@ -224,7 +255,9 @@ static int validate_edge_px(struct image *q, int x, int y)
  *  min - minimum number of segments needed for corner
  *
  */
-int fast_sample(struct image *q, struct circle *c, int i, int thresh)
+#define CORNER_PLACEHOLDER 255
+int fast_sample(struct image *q, struct fill_stack *s,
+		struct circle *c, int i, int thresh)
 {
 	int j;
 	int count = 0;
@@ -236,10 +269,27 @@ int fast_sample(struct image *q, struct circle *c, int i, int thresh)
 			count++;
 	}
 
-	if (count > thresh)
-		q->scratch[i] = 250;
-	if (c->ns - count > thresh + 1)
-		q->scratch[i] = 250;
+	if (count > thresh || c->ns - count > thresh + 1)
+	{
+		q->scratch[i] = CORNER_PLACEHOLDER;
+		fill_stack_push_i(s, i);
+	}
+}
+
+int fast_detect()
+{
+
+}
+
+int process_corners(struct image *q, struct fill_stack *s)
+{
+	int i;
+
+	while (fill_stack_pop_i(s, &i))
+	{
+		q->scratch[i] = 30;
+	}
+
 }
 
 int terrain_fill_seed(struct image *q, int xs, int ys, int bs, int id)
@@ -250,6 +300,7 @@ int terrain_fill_seed(struct image *q, int xs, int ys, int bs, int id)
 	int nx, ny;
 	int w = q->w;
 	struct fill_stack s;
+	struct fill_stack cs;
 
 	struct circle cc;
 	struct circle cf;
@@ -260,6 +311,14 @@ int terrain_fill_seed(struct image *q, int xs, int ys, int bs, int id)
 #ifdef DEBUG_FILL_STACK
 	s.max_depth = 0;
 #endif
+
+	cs.pointer = 0;
+	cs.size = 10000;
+	cs.stack = malloc(10000 * sizeof(int));
+#ifdef DEBUG_FILL_STACK
+	cs.max_depth = 0;
+#endif
+
 	fill_stack_push(&s, w, xs, ys);
 
 	get_circle(&cc, bs/2);
@@ -278,9 +337,12 @@ int terrain_fill_seed(struct image *q, int xs, int ys, int bs, int id)
 		if (q->scratch[i] == id)
 			continue;
 
+		if (q->scratch[i] == CORNER_PLACEHOLDER)
+			continue;
+
 		q->scratch[i] = id;
 
-		fast_sample(q, &cc, i, c_thresh);
+		fast_sample(q, &cs, &cc, i, c_thresh);
 
 		le = x > 0;
 		re = x < q->w;
@@ -312,6 +374,13 @@ int terrain_fill_seed(struct image *q, int xs, int ys, int bs, int id)
 	printf("max stack depth: %d\n", s.max_depth);
 #endif
 	free(s.stack);
+
+	process_corners(q, &cs);
+
+#ifdef DEBUG_FILL_STACK
+	printf("max stack depth: %d\n", cs.max_depth);
+#endif
+	free(cs.stack);
 }
 
 int main(int argc, char **argv)
