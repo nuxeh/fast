@@ -43,9 +43,11 @@ struct circle {
 };
 
 /* Bressenham circle */
-void get_circle(struct circle *c, int r)
+struct circle * get_circle(int r)
 {
 	int d, x, y, p, i, l;
+	struct circle *c = malloc(sizeof(struct circle));
+	memset(c, 0, sizeof(struct circle));
 
 	int ii = 0;
 
@@ -93,6 +95,8 @@ void get_circle(struct circle *c, int r)
 
 	c->r = r;
 	c->l = l;
+
+	return c;
 }
 
 int get_circle_segments(struct circle *c, int n)
@@ -112,10 +116,9 @@ int get_circle_segments(struct circle *c, int n)
 
 void destroy_circle(struct circle *c)
 {
-	if (c->array)
-		free(c->array);
-	if (c->segments)
-		free(c->segments);
+	free(c->array);
+	free(c->segments);
+	free(c);
 }
 
 #define DEBUG_FILL_STACK
@@ -193,6 +196,23 @@ static int fill_stack_push_i(struct fill_stack *s, int i)
 	{
 		return 0;
 	}
+}
+
+struct fill_stack * get_stack(int max_size)
+{
+	struct fill_stack *s = malloc(sizeof(struct fill_stack));
+	memset(s, 0, sizeof(struct fill_stack));
+
+	s->size = max_size;
+	s->stack = malloc(max_size * sizeof(int));
+
+	return s;
+}
+
+void destroy_stack(struct fill_stack *s)
+{
+	free(s->stack);
+	free(s);
 }
 
 void emptyStack(struct fill_stack *s)
@@ -302,43 +322,27 @@ int process_corners(struct image *q, struct fill_stack *s)
 
 int terrain_fill_seed(struct image *q, int xs, int ys, int bs, int id)
 {
-
 	int x, y, i;
 	int le, re, te, be;
 	int nx, ny;
 	int w = q->w;
-	struct fill_stack s;
-	struct fill_stack cs;
 
-	struct circle cc;
-	struct circle cf;
+	struct fill_stack *s = get_stack(10000);
+	struct fill_stack *cs = get_stack(10000);
 
-	s.pointer = 0;
-	s.size = 10000;
-	s.stack = malloc(10000 * sizeof(int));
-#ifdef DEBUG_FILL_STACK
-	s.max_depth = 0;
-#endif
+	struct circle *cc = get_circle(bs/2);
+	struct circle *cf = get_circle((int) roundf((float) bs * 1.5));
 
-	cs.pointer = 0;
-	cs.size = 10000;
-	cs.stack = malloc(10000 * sizeof(int));
-#ifdef DEBUG_FILL_STACK
-	cs.max_depth = 0;
-#endif
+	fill_stack_push(s, w, xs, ys);
 
-	fill_stack_push(&s, w, xs, ys);
-
-	get_circle(&cc, bs/2);
-	get_circle(&cf, (int) roundf((float) bs * 1.5));
-	get_circle_segments(&cc, 16);
-	int c_thresh = (cc.ns / 2) + 2;
+	get_circle_segments(cc, 16);
+	int c_thresh = (cc->ns / 2) + 2;
 
 	int e;
 	for (e = 0; e<8; e++)
-		printf("%d,%d\n", cc.segments[e].x, cc.segments[e].y);
+		printf("%d,%d\n", cc->segments[e].x, cc->segments[e].y);
 
-	while (fill_stack_pop(&s, w, &x, &y))
+	while (fill_stack_pop(s, w, &x, &y))
 	{
 		i = x + y * q->w;
 
@@ -350,7 +354,7 @@ int terrain_fill_seed(struct image *q, int xs, int ys, int bs, int id)
 
 		q->scratch[i] = id;
 
-		fast_sample(q, &cs, &cc, i, c_thresh);
+		fast_sample(q, cs, cc, i, c_thresh);
 
 		le = x > 0;
 		re = x < q->w;
@@ -359,36 +363,39 @@ int terrain_fill_seed(struct image *q, int xs, int ys, int bs, int id)
 
 		/* N E S W */
 		if (te && validate_edge_px(q, nx = x, ny = y-1))
-			fill_stack_push(&s, w, nx, ny);
+			fill_stack_push(s, w, nx, ny);
 		if (re && validate_edge_px(q, nx = x+1, ny = y))
-			fill_stack_push(&s, w, nx, ny);
+			fill_stack_push(s, w, nx, ny);
 		if (be && validate_edge_px(q, nx = x, ny = y+1))
-			fill_stack_push(&s, w, nx, ny);
+			fill_stack_push(s, w, nx, ny);
 		if (le && validate_edge_px(q, nx = x-1, ny = y))
-			fill_stack_push(&s, w, nx, ny);
+			fill_stack_push(s, w, nx, ny);
 
 		/* NE SE SW NW */
 		if (te && le && validate_edge_px(q, nx = x+1, ny = y-1))
-			fill_stack_push(&s, w, nx, ny);
+			fill_stack_push(s, w, nx, ny);
 		if (re && be && validate_edge_px(q, nx = x+1, ny = y+1))
-			fill_stack_push(&s, w, nx, ny);
+			fill_stack_push(s, w, nx, ny);
 		if (be && le && validate_edge_px(q, nx = x-1, ny = y+1))
-			fill_stack_push(&s, w, nx, ny);
+			fill_stack_push(s, w, nx, ny);
 		if (le && te && validate_edge_px(q, nx = x-1, ny = y-1))
-			fill_stack_push(&s, w, nx, ny);
+			fill_stack_push(s, w, nx, ny);
 	}
 
 #ifdef DEBUG_FILL_STACK
-	printf("max stack depth: %d\n", s.max_depth);
+	printf("max stack depth: %d\n", s->max_depth);
 #endif
-	free(s.stack);
+	destroy_stack(s);
 
-	process_corners(q, &cs);
+	process_corners(q, cs);
 
 #ifdef DEBUG_FILL_STACK
-	printf("max stack depth: %d\n", cs.max_depth);
+	printf("max stack depth: %d\n", cs->max_depth);
 #endif
-	free(cs.stack);
+	destroy_stack(cs);
+
+	destroy_circle(cc);
+	destroy_circle(cf);
 }
 
 int main(int argc, char **argv)
