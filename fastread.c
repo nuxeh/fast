@@ -281,6 +281,14 @@ int fast_detect()
 
 }
 
+int corner_area_scan(struct image *q)
+{
+	for(int y=-radius; y<=radius; y++)
+	    for(int x=-radius; x<=radius; x++)
+		if(x*x+y*y <= radius*radius)
+		    setpixel(origin.x+x, origin.y+y);
+}
+
 int process_corners(struct image *q, struct fill_stack *s)
 {
 	int i;
@@ -400,7 +408,9 @@ int main(int argc, char **argv)
 	q.scratch = malloc(q.w * q.h * sizeof(q.scratch[0]));
 	memset(q.scratch, 0, q.w * q.h * sizeof(q.scratch[0]));
 
-	terrain_fill_seed(&q, 81, 81, 5, 128);
+	terrain_fill_seed(&q, 240, 200, 20, 128);
+	terrain_fill_seed(&q, 81, 81, 20, 128);
+	terrain_fill_seed(&q, 120, 120, 20, 128);
 
 	pgm_write("/tmp/ff.pgm", q.w, q.h, q.scratch);
 
