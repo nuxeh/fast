@@ -265,6 +265,9 @@ static int validate_edge_px(struct image *q, int x, int y)
 	return 0;
 }
 
+// main fill stack to add points
+//
+
 /*
  * Use a FAST-like method for sampling potential corners
  *
@@ -301,6 +304,7 @@ int fast_detect()
 
 }
 
+#if 0
 int corner_area_scan(struct image *q)
 {
 	for(int y=-radius; y<=radius; y++)
@@ -308,6 +312,7 @@ int corner_area_scan(struct image *q)
 		if(x*x+y*y <= radius*radius)
 		    setpixel(origin.x+x, origin.y+y);
 }
+#endif
 
 int process_corners(struct image *q, struct fill_stack *s)
 {
@@ -328,7 +333,7 @@ int terrain_fill_seed(struct image *q, int xs, int ys, int bs, int id)
 	int w = q->w;
 
 	struct fill_stack *s = get_stack(10000);
-	struct fill_stack *cs = get_stack(10000);
+	struct fill_stack *cs = get_stack(100);
 
 	struct circle *cc = get_circle(bs/2);
 	struct circle *cf = get_circle((int) roundf((float) bs * 1.5));
@@ -342,6 +347,11 @@ int terrain_fill_seed(struct image *q, int xs, int ys, int bs, int id)
 	for (e = 0; e<8; e++)
 		printf("%d,%d\n", cc->segments[e].x, cc->segments[e].y);
 
+	int imgc = 0;
+
+	int neighbour_scan_last = 0;
+	int neighbour_scan_thresh = bs * 4;
+
 	while (fill_stack_pop(s, w, &x, &y))
 	{
 		i = x + y * q->w;
@@ -353,6 +363,18 @@ int terrain_fill_seed(struct image *q, int xs, int ys, int bs, int id)
 			continue;
 
 		q->scratch[i] = id;
+
+		if (neighbour_scan_last++ > neighbour_scan_thresh)
+		{
+			q->scratch[i] = 240;
+			neighbour_scan_last = 0;
+		}
+
+		#if 0
+		char out_str[20];
+		sprintf(out_str, "/tmp/fff_%05d.pgm\0", imgc++);
+		pgm_write(out_str, q->w, q->h, q->scratch);
+		#endif
 
 		fast_sample(q, cs, cc, i, c_thresh);
 
