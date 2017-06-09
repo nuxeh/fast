@@ -265,6 +265,38 @@ static int validate_edge_px(struct image *q, int x, int y)
 	return 0;
 }
 
+int edge_fill(struct image *q, int x, int y, struct fill_stack *s)
+{
+	int nx, ny;
+	int le, re, te, be;
+	int w = q->w;
+
+	le = x > 0;
+	re = x < q->w;
+	te = y > 0;
+	be = y < q->h;
+
+	/* N E S W */
+	if (te && validate_edge_px(q, nx = x, ny = y-1))
+		fill_stack_push(s, w, nx, ny);
+	if (re && validate_edge_px(q, nx = x+1, ny = y))
+		fill_stack_push(s, w, nx, ny);
+	if (be && validate_edge_px(q, nx = x, ny = y+1))
+		fill_stack_push(s, w, nx, ny);
+	if (le && validate_edge_px(q, nx = x-1, ny = y))
+		fill_stack_push(s, w, nx, ny);
+
+	/* NE SE SW NW */
+	if (te && le && validate_edge_px(q, nx = x+1, ny = y-1))
+		fill_stack_push(s, w, nx, ny);
+	if (re && be && validate_edge_px(q, nx = x+1, ny = y+1))
+		fill_stack_push(s, w, nx, ny);
+	if (be && le && validate_edge_px(q, nx = x-1, ny = y+1))
+		fill_stack_push(s, w, nx, ny);
+	if (le && te && validate_edge_px(q, nx = x-1, ny = y-1))
+		fill_stack_push(s, w, nx, ny);
+}
+
 // main fill stack to add points
 //
 
@@ -295,13 +327,39 @@ int fast_sample(struct image *q, struct fill_stack *s,
 	if (count > thresh || c->ns - count > thresh + 1)
 	{
 		q->scratch[i] = CORNER_PLACEHOLDER;
-		fill_stack_push_i(s, i);
+		//fill_stack_push_i(s, i);
 	}
 }
 
-int fast_detect()
+int fast_detect(struct fill_stack *s)
 {
 
+}
+
+int refine_corner(struct image *q, int cx, int cy, int bs)
+{
+	int i;
+	int x, y;
+	int count = 0;
+	int count_max = bs * 2;
+	struct fill_stack *s = get_stack(bs*4);
+	const int w = q->w;
+
+	fill_stack_push(s, w, cx, cy);
+
+	while (fill_stack_pop(s, w, &x, &y))
+	{
+		i = x + y * w;
+
+		q->scratch[i] = 80;
+
+		if (count++ > count_max)
+			break;
+
+		edge_fill(q, x, y, s);
+	}
+
+	destroy_stack(s);
 }
 
 #if 0
@@ -328,8 +386,6 @@ int process_corners(struct image *q, struct fill_stack *s)
 int terrain_fill_seed(struct image *q, int xs, int ys, int bs, int id)
 {
 	int x, y, i;
-	int le, re, te, be;
-	int nx, ny;
 	int w = q->w;
 
 	struct fill_stack *s = get_stack(10000);
@@ -364,44 +420,19 @@ int terrain_fill_seed(struct image *q, int xs, int ys, int bs, int id)
 
 		q->scratch[i] = id;
 
-		if (neighbour_scan_last++ > neighbour_scan_thresh)
-		{
-			q->scratch[i] = 240;
-			neighbour_scan_last = 0;
-		}
-
 		#if 0
 		char out_str[20];
 		sprintf(out_str, "/tmp/fff_%05d.pgm\0", imgc++);
 		pgm_write(out_str, q->w, q->h, q->scratch);
 		#endif
 
+#if 0
 		fast_sample(q, cs, cc, i, c_thresh);
-
-		le = x > 0;
-		re = x < q->w;
-		te = y > 0;
-		be = y < q->h;
-
-		/* N E S W */
-		if (te && validate_edge_px(q, nx = x, ny = y-1))
-			fill_stack_push(s, w, nx, ny);
-		if (re && validate_edge_px(q, nx = x+1, ny = y))
-			fill_stack_push(s, w, nx, ny);
-		if (be && validate_edge_px(q, nx = x, ny = y+1))
-			fill_stack_push(s, w, nx, ny);
-		if (le && validate_edge_px(q, nx = x-1, ny = y))
-			fill_stack_push(s, w, nx, ny);
-
-		/* NE SE SW NW */
-		if (te && le && validate_edge_px(q, nx = x+1, ny = y-1))
-			fill_stack_push(s, w, nx, ny);
-		if (re && be && validate_edge_px(q, nx = x+1, ny = y+1))
-			fill_stack_push(s, w, nx, ny);
-		if (be && le && validate_edge_px(q, nx = x-1, ny = y+1))
-			fill_stack_push(s, w, nx, ny);
-		if (le && te && validate_edge_px(q, nx = x-1, ny = y-1))
-			fill_stack_push(s, w, nx, ny);
+#else
+		if (fast_sample(q, cs, cc, i, c_thresh))
+			refine_corner(q, x, y, bs);
+#endif
+		edge_fill(q, x, y, s);
 	}
 
 #ifdef DEBUG_FILL_STACK
