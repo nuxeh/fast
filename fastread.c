@@ -343,20 +343,47 @@ int fast_sample(struct image *q, struct fill_stack *s,
 	return ret;
 }
 
-int fast_detect(struct fill_stack *s)
-{
+// TODO: function pointers
 
+int fast_detect(struct circle *s)
+{
+	int j;
+	int count = 0;
+	struct quirc_point *o = c->array;
+	int ret = 0;
+
+
+	for (j = 0; j < c->l; j++)
+	{
+		if (q->pixels[i + o[j].x + q->w * o[j].y] == PIXEL_WHITE)
+			count++;
+	}
+
+	if (count > thresh || c->ns - count > thresh + 1)
+	{
+		//q->scratch[i] = CORNER_PLACEHOLDER;
+		ret = 1;
+		//fill_stack_push_i(s, i);
+	}
+
+	return ret;
 }
 
-int refine_corner(struct image *q, int cx, int cy, int bs, int id,
+
+
+int refine_corner(struct image *q,
+		  int cx, int cy, int bs, int id,
 		  struct fill_stack *p)
 {
 	int i;
 	int x, y;
+
 	int count = 0;
 	int count_max = bs / 2;
-	struct fill_stack *s = get_stack(bs*4);
 	const int w = q->w;
+
+	struct fill_stack *s = get_stack(bs*4);
+	struct circle *cf = get_circle((int) roundf((float) bs * 1.5));
 
 	fill_stack_push(s, w, cx, cy);
 
@@ -370,6 +397,8 @@ int refine_corner(struct image *q, int cx, int cy, int bs, int id,
 
 		printf("%d %d\n", bs, count);
 
+		fast_detect();
+
 		edge_fill(q, x, y, s, OVERLAP_OFF);
 
 		if (count < count_max)
@@ -378,7 +407,7 @@ int refine_corner(struct image *q, int cx, int cy, int bs, int id,
 			break;
 	}
 
-	/* seed parent stack */
+	/* re-seed parent fill stack */
 	while (fill_stack_pop(s, w, &x, &y))
 	{
 		fill_stack_push(p, w, x, y);
@@ -387,10 +416,10 @@ int refine_corner(struct image *q, int cx, int cy, int bs, int id,
 
 	i = cx + cy * w;
 	scratch[i] = 128;
-
 	printf("---\n");
 
 	destroy_stack(s);
+	destroy_circle(cf);
 }
 
 #if 0
@@ -423,7 +452,6 @@ int terrain_fill_seed(struct image *q, int xs, int ys, int bs, int id)
 	struct fill_stack *cs = get_stack(100);
 
 	struct circle *cc = get_circle(bs/2);
-	struct circle *cf = get_circle((int) roundf((float) bs * 1.5));
 
 	fill_stack_push(s, w, xs, ys);
 
@@ -481,7 +509,6 @@ int terrain_fill_seed(struct image *q, int xs, int ys, int bs, int id)
 	destroy_stack(cs);
 
 	destroy_circle(cc);
-	destroy_circle(cf);
 }
 
 int main(int argc, char **argv)
