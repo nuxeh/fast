@@ -8,6 +8,11 @@
 #define PIXEL_WHITE 255
 #define PIXEL_BLACK 0
 
+#define OVERLAP_OFF 0
+#define OVERLAP_ON  1
+
+unsigned char *scratch;
+
 struct image {
 	unsigned char 	*pixels;
 	unsigned char	*scratch;
@@ -226,7 +231,7 @@ void emptyStack(struct fill_stack *s)
  * Pixel is on an edge if it has at least one white neighbour
  *
  */
-static int validate_edge_px(struct image *q, int x, int y)
+static int validate_edge_px(struct image *q, int x, int y, int overlap)
 {
 	int le = x > 0;
 	int re = x < q->w;
@@ -234,13 +239,14 @@ static int validate_edge_px(struct image *q, int x, int y)
 	int be = y < q->h;
 	int i = x + y * q->w;
 
-	// Skip if already covered?
-
 	if (q->pixels[i] == PIXEL_WHITE)
 		return 0;
 
-	if (q->scratch[i] != 0)
-		return 0;
+	if (overlap == OVERLAP_OFF)
+	{
+		if (q->scratch[i] != 0)
+			return 0;
+	}
 
 	/* N E S W */
 	if (te && q->pixels[i - q->w] == PIXEL_WHITE)
@@ -265,7 +271,9 @@ static int validate_edge_px(struct image *q, int x, int y)
 	return 0;
 }
 
-int edge_fill(struct image *q, int x, int y, struct fill_stack *s)
+// TODO: Function pointers
+
+int edge_fill(struct image *q, int x, int y, struct fill_stack *s, int olp)
 {
 	int nx, ny;
 	int le, re, te, be;
@@ -277,23 +285,23 @@ int edge_fill(struct image *q, int x, int y, struct fill_stack *s)
 	be = y < q->h;
 
 	/* N E S W */
-	if (te && validate_edge_px(q, nx = x, ny = y-1))
+	if (te && validate_edge_px(q, nx = x, ny = y-1, olp))
 		fill_stack_push(s, w, nx, ny);
-	if (re && validate_edge_px(q, nx = x+1, ny = y))
+	if (re && validate_edge_px(q, nx = x+1, ny = y, olp))
 		fill_stack_push(s, w, nx, ny);
-	if (be && validate_edge_px(q, nx = x, ny = y+1))
+	if (be && validate_edge_px(q, nx = x, ny = y+1, olp))
 		fill_stack_push(s, w, nx, ny);
-	if (le && validate_edge_px(q, nx = x-1, ny = y))
+	if (le && validate_edge_px(q, nx = x-1, ny = y, olp))
 		fill_stack_push(s, w, nx, ny);
 
 	/* NE SE SW NW */
-	if (te && le && validate_edge_px(q, nx = x+1, ny = y-1))
+	if (te && le && validate_edge_px(q, nx = x+1, ny = y-1, olp))
 		fill_stack_push(s, w, nx, ny);
-	if (re && be && validate_edge_px(q, nx = x+1, ny = y+1))
+	if (re && be && validate_edge_px(q, nx = x+1, ny = y+1, olp))
 		fill_stack_push(s, w, nx, ny);
-	if (be && le && validate_edge_px(q, nx = x-1, ny = y+1))
+	if (be && le && validate_edge_px(q, nx = x-1, ny = y+1, olp))
 		fill_stack_push(s, w, nx, ny);
-	if (le && te && validate_edge_px(q, nx = x-1, ny = y-1))
+	if (le && te && validate_edge_px(q, nx = x-1, ny = y-1, olp))
 		fill_stack_push(s, w, nx, ny);
 }
 
@@ -310,13 +318,14 @@ int edge_fill(struct image *q, int x, int y, struct fill_stack *s)
  *  min - minimum number of segments needed for corner
  *
  */
-#define CORNER_PLACEHOLDER 255
+#define CORNER_PLACEHOLDER 254
 int fast_sample(struct image *q, struct fill_stack *s,
 		struct circle *c, int i, int thresh)
 {
 	int j;
 	int count = 0;
 	struct quirc_point *o = c->segments;
+	int ret = 0;
 
 	for (j = 0; j < c->ns; j++)
 	{
@@ -326,9 +335,12 @@ int fast_sample(struct image *q, struct fill_stack *s,
 
 	if (count > thresh || c->ns - count > thresh + 1)
 	{
-		q->scratch[i] = CORNER_PLACEHOLDER;
+		//q->scratch[i] = CORNER_PLACEHOLDER;
+		ret = 1;
 		//fill_stack_push_i(s, i);
 	}
+
+	return ret;
 }
 
 int fast_detect(struct fill_stack *s)
@@ -336,12 +348,13 @@ int fast_detect(struct fill_stack *s)
 
 }
 
-int refine_corner(struct image *q, int cx, int cy, int bs)
+int refine_corner(struct image *q, int cx, int cy, int bs, int id,
+		  struct fill_stack *p)
 {
 	int i;
 	int x, y;
 	int count = 0;
-	int count_max = bs * 2;
+	int count_max = bs / 2;
 	struct fill_stack *s = get_stack(bs*4);
 	const int w = q->w;
 
@@ -351,13 +364,31 @@ int refine_corner(struct image *q, int cx, int cy, int bs)
 	{
 		i = x + y * w;
 
-		q->scratch[i] = 80;
+		//q->scratch[i] = 80;
+		q->scratch[i] = id;
+		scratch[i] = 254;
 
-		if (count++ > count_max)
+		printf("%d %d\n", bs, count);
+
+		edge_fill(q, x, y, s, OVERLAP_OFF);
+
+		if (count < count_max)
+			count++;
+		else
 			break;
-
-		edge_fill(q, x, y, s);
 	}
+
+	/* seed parent stack */
+	while (fill_stack_pop(s, w, &x, &y))
+	{
+		fill_stack_push(p, w, x, y);
+		scratch[i] = 200;
+	}
+
+	i = cx + cy * w;
+	scratch[i] = 128;
+
+	printf("---\n");
 
 	destroy_stack(s);
 }
@@ -430,9 +461,11 @@ int terrain_fill_seed(struct image *q, int xs, int ys, int bs, int id)
 		fast_sample(q, cs, cc, i, c_thresh);
 #else
 		if (fast_sample(q, cs, cc, i, c_thresh))
-			refine_corner(q, x, y, bs);
+		{
+			refine_corner(q, x, y, bs, id, s);
+		}
 #endif
-		edge_fill(q, x, y, s);
+		edge_fill(q, x, y, s, OVERLAP_OFF);
 	}
 
 #ifdef DEBUG_FILL_STACK
@@ -460,20 +493,33 @@ int main(int argc, char **argv)
 	pgm_write("/tmp/bcirc.pgm", 100, 100, imgc);
 	#endif
 
-	unsigned char *img;
 	struct image q;
-	int w, h;
 
 	q.pixels = pgm_read(argv[1], &q.w, &q.h);
 	q.scratch = malloc(q.w * q.h * sizeof(q.scratch[0]));
 	memset(q.scratch, 0, q.w * q.h * sizeof(q.scratch[0]));
 
-	terrain_fill_seed(&q, 240, 200, 20, 128);
-	terrain_fill_seed(&q, 81, 81, 20, 128);
-	terrain_fill_seed(&q, 120, 120, 20, 128);
+	scratch = malloc(q.w*q.h);
+	memset(scratch, 0, q.w * q.h * sizeof(scratch[0]));
+	unsigned char *out;
+	out = malloc(q.w*q.h);
 
-	pgm_write("/tmp/ff.pgm", q.w, q.h, q.scratch);
+	//terrain_fill_seed(&q, 240, 200, 20, 128);
+	terrain_fill_seed(&q, 81, 81, 20, 128);
+	//terrain_fill_seed(&q, 120, 120, 20, 128);
+
+	int i;
+	for (i=0; i < q.w*q.h; i++)
+		out[i] = ((scratch[i] * 2) + q.scratch[i]) / 3;
+
+	pgm_write("/tmp/ff0.pgm", q.w, q.h, q.scratch);
+	pgm_write("/tmp/ff1.pgm", q.w, q.h, out);
+	pgm_write("/tmp/ff2.pgm", q.w, q.h, scratch);
+	//pgm_write("/tmp/ff.pgm", q.w, q.h, q.scratch);
 
 	free(q.pixels);
 	free(q.scratch);
+
+	free(scratch);
+	free(out);
 }
